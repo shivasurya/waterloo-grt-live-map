@@ -21,7 +21,7 @@ const resetTimer = () => {
   clearInterval(timerInterval);
   
   const node = document.querySelector(".countdownTimer");
-  node.innerHTML = 15;
+  node.innerHTML = 10;
   timerInterval = setInterval(() => {
     const n = document.querySelector(".countdownTimer");
     n.innerHTML = n.innerHTML - 1;
@@ -47,7 +47,6 @@ const updateLayer = async (featureLayer, layerView) => {
 
   // then get all the locations by calling the API (Protocol buffer service)
   const locations = await protobufUpdate();
-  console.log("locations:", locations);
 
   // Add all the locations to the map:
   const graphics = locations.map(locationObject => {
@@ -57,8 +56,7 @@ const updateLayer = async (featureLayer, layerView) => {
       longitude: locationObject.vehicle.position.longitude
     };
 
-    var timeStampDate = new Date(0); // The 0 there is the key, which sets the date to the epoch
-    timeStampDate.setUTCSeconds(locationObject.vehicle.timestamp);
+    var timeStampDate = new Date(); // The 0 there is the key, which sets the date to the epoch
 
     var attributes = {
       name: locationObject.vehicle.vehicle.label,
@@ -74,7 +72,7 @@ const updateLayer = async (featureLayer, layerView) => {
   });
 
   // first clear out the graphicsLayer
-  console.log('featureLayer:', featureLayer);
+ // console.log('featureLayer:', featureLayer);
   layerView.queryFeatures().then((results) => {
     featureLayer.applyEdits({
       deleteFeatures: results.features,
@@ -86,11 +84,11 @@ const updateLayer = async (featureLayer, layerView) => {
 
 const main = async (latitude, longitude) => {
 
-  const [Map, MapView, FeatureLayer] = await loadModules(
-    ["esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer"],
+  const [Map, MapView, FeatureLayer, Legend] = await loadModules(
+    ["esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer", "esri/widgets/Legend"],
     { css: true }
   );
-
+  
   const fl = new FeatureLayer({
     fields: [
       {
@@ -121,22 +119,30 @@ const main = async (latitude, longitude) => {
     ],
     objectIdField: "ObjectID",
     geometryType: "point",
+    label: "bus",
     renderer: {
       type: "simple", // autocasts as new SimpleRenderer()
+      visualVariables: [
+        {
+          type: "color",
+          field: "route", // Carbon storage
+          stops: [
+            { value: "301", color: "red" }, 
+            { value: "19", color: "green" },
+            { value: "5", color: "orange" },
+            { value: "202", color: "blue" },
+            { value: "201", color: "black" },
+            { value: "19", color: "yellow" },
+            { value: "13", color: "Salmon" },
+          ]
+        }
+      ],
       symbol: {
         type: "simple-marker", // autocasts as new SimpleMarkerSymbol()
-        style: "circle",
-        color: "blue",
-        size: "15px", // pixels
-        outline: {
-          // autocasts as new SimpleLineSymbol()
-          color: [255, 255, 255],
-          width: 1, // points
-        }
       }
     },
     popupTemplate: {
-      title: "{name}",
+      title: "{route}",
       content:
         "Updated: {timestamp}<br />Route: {route} (Started {route_start})"
     },
@@ -145,15 +151,14 @@ const main = async (latitude, longitude) => {
         symbol: {
           type: "text",  
           color: "black",
-         
           font: {  
-             size: 10,
+             size: 12,
              weight: "bold"
            }
         },
         labelPlacement: "center-right",
         labelExpressionInfo: {
-          expression: "$feature.name"
+          expression: "$feature.route"
         },
         maxScale: 0,
         minScale: 100000
@@ -179,7 +184,7 @@ const main = async (latitude, longitude) => {
   var view = new MapView(viewOptions);
   
   view.whenLayerView(fl).then(function(layerView) {
-    console.log('layerView', layerView);
+    //console.log('layerView', layerView);
    
     updateLayer(fl, layerView);
     resetTimer();
@@ -187,9 +192,8 @@ const main = async (latitude, longitude) => {
     setInterval(() => {
       updateLayer(fl, layerView);
       resetTimer();
-    }, 5000);
+    }, 10000);
   });
 
-  
 };
 getLocation();
