@@ -1,6 +1,6 @@
 # Waterloo GRT Bus and LRT Live Map 🎉 🚌 🚋
 
-Take a look at livemap at livemap.shivasurya.me, works only for Kitchener, Waterloo & Cambridge Region + GRT Service location
+Take a look at livemap at [livemap.shivasurya.me](https://livemap.shivasurya.me), works only for Kitchener, Waterloo & Cambridge Region + GRT Service location
 
 **Note: No private location data is being logged or sent back to server.**
 
