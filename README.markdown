@@ -1,9 +1,11 @@
-# Waterloo GRT Live Feed Impl
+# Waterloo GRT Bus and LRT Live Map 🎉 🚌 🚋
 
-A Pen created on CodePen.io. Original URL: [https://codepen.io/shivasurya/pen/eYeXxvp](https://codepen.io/shivasurya/pen/eYeXxvp).
+Take a look at livemap at [livemap.shivasurya.me](https://livemap.shivasurya.me), works only for Kitchener, Waterloo & Cambridge Region + GRT Service location
 
-Example of loading a protocol buffer feed directly into an ArcGIS
+**Note: No private location data is being logged or sent back to server.**
+
+Waterloo GRT Live Bus + LRT Map loading a protocol buffer feed directly into an ArcGIS
 API for JavaScript map. 
 
-In this case we are loading Bus locations from MetroSTL 
+Credits:
 (https://www.metrostlouis.org/developer-resources/)
