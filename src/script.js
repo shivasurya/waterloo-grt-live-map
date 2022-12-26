@@ -4,7 +4,7 @@ import { loadModules } from "https://unpkg.com/esri-loader/dist/esm/esri-loader.
 
 const protobufUpdate = async () => {
   const url =
-    "https://grffe.com/proxy/proxy.php?http://webapps.regionofwaterloo.ca/api/grt-routes/api/vehiclepositions?cacheBust=" +
+    "https://livemap.shivasurya.workers.dev?cacheBust=" +
     new Date().getTime();
   let response = await fetch(url);
   if (response.ok) {
