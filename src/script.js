@@ -4,7 +4,7 @@ import { loadModules } from "https://unpkg.com/esri-loader/dist/esm/esri-loader.
 
 const protobufUpdate = async () => {
   const url =
-    "https://livemap.shivasurya.workers.dev?cacheBust=" +
+    "https://livemap.shivasurya.workers.dev/?cacheBust=" +
     new Date().getTime();
   let response = await fetch(url);
   if (response.ok) {
