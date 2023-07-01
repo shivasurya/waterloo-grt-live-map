@@ -4,6 +4,8 @@ Take a look at livemap at [livemap.shivasurya.me](https://livemap.shivasurya.me)
 
 **Note: No private location data is being logged or sent back to server.**
 
+![Screenshot of LiveMap Application](./screengrab.png)
+
 Waterloo GRT Live Bus + LRT Map loading a protocol buffer feed directly into an ArcGIS
 API for JavaScript map. 
 
