@@ -7,5 +7,10 @@ Take a look at livemap at [livemap.shivasurya.me](https://livemap.shivasurya.me)
 Waterloo GRT Live Bus + LRT Map loading a protocol buffer feed directly into an ArcGIS
 API for JavaScript map. 
 
+#### Updates
+
+- ESRI Maps to Mapbox Migration was possible to due [Sourcegraph Cody](https://sourcegraph.com/cody) helped in answering all prompts and completing the code 😊 🎉
+- Mapbox map now loading live GRT Bus & LRT data directly from protocol buffer feed.
+
 Credits:
 (https://www.metrostlouis.org/developer-resources/)
