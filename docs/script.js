@@ -39,8 +39,14 @@ function getLocation() {
   }
 }
 
+let map;
+
 function showPosition(position) {
   main(position.coords.latitude, position.coords.longitude);
+
+  const currentLocationMarker = new mapboxgl.Marker()
+    .setLngLat([position.coords.longitude, position.coords.latitude])
+    .addTo(map); // Add it to the map
 }
 
 // Removes all the graphics, calls the API to get the data,
@@ -119,7 +125,7 @@ const main = async (latitude, longitude) => {
     zoom: 14,
   };
 
-  const map = new mapboxgl.Map(viewOptions);
+  map = new mapboxgl.Map(viewOptions);
 
   setInterval(() => {
     updateLayer(map);
