@@ -1,7 +1,7 @@
 /* Security Enthusiasts: I want to save your time here
    This mapbox access token is supposed to be used on public domains and doesn't have any additional scope.
    This token is scoped for livemap.shivasurya.me. Thanks for your time
-*/ 
+*/
 mapboxgl.accessToken =
   "pk.eyJ1Ijoic2hpdmFzdXJ5YSIsImEiOiJjbGprNDV0amwwZHVjM3FreThqdGo0bnIxIn0.cduJHn0dW-iE6np2CpXcIg";
 
