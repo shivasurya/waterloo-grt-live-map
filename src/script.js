@@ -32,6 +32,9 @@ const resetTimer = () => {
 };
 
 function getLocation() {
+  if(window.gtag) {
+    gtag('event', 'page_view'); 
+  }
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(showPosition);
   } else {

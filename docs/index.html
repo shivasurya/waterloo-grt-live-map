@@ -1,63 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Waterloo GRT Bus and LRT Live Tracking App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-      .marker {
-        background-image: url("mapbox-icon.png");
-        background-size: cover;
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        cursor: pointer;
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Waterloo GRT Bus and LRT Live Tracking App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    .marker {
+      background-image: url("mapbox-icon.png");
+      background-size: cover;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Small screens */
+    @media only screen and (max-width: 600px) {
+
+      .mapboxgl-ctrl-top-left,
+      .mapboxgl-ctrl-top-right {
+        display: none;
       }
-      /* Small screens */
-      @media only screen and (max-width: 600px) {
-        .mapboxgl-ctrl-top-left,
-        .mapboxgl-ctrl-top-right {
-          display: none;
-        }
+    }
+
+    /* Medium screens */
+    @media only screen and (min-width: 600px) and (max-width: 1200px) {
+      .mapboxgl-ctrl-top-left {
+        display: block;
       }
 
-      /* Medium screens */
-      @media only screen and (min-width: 600px) and (max-width: 1200px) {
-        .mapboxgl-ctrl-top-left {
-          display: block;
-        }
-        .mapboxgl-ctrl-top-right {
-          display: none;
-        }
+      .mapboxgl-ctrl-top-right {
+        display: none;
       }
+    }
 
-      /* Large screens */
-      @media only screen and (min-width: 1200px) {
-        .mapboxgl-ctrl-top-left,
-        .mapboxgl-ctrl-top-right {
-          display: block;
-        }
+    /* Large screens */
+    @media only screen and (min-width: 1200px) {
+
+      .mapboxgl-ctrl-top-left,
+      .mapboxgl-ctrl-top-right {
+        display: block;
       }
-    </style>
-    <!-- partial -->
-    <script src="https://unpkg.com/pbf@3.0.5/dist/pbf.js"></script>
+    }
+  </style>
+  <!-- partial -->
+  <script src="https://unpkg.com/pbf@3.0.5/dist/pbf.js"></script>
 
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-    <link
-      href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css"
-      rel="stylesheet"
-    />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
 
-    <script src="https://unpkg.com/gtfs-realtime-pbf-js-module@1.0.0/gtfs-realtime.browser.proto.js"></script>
-    <script type="module" src="./script.js"></script>
+  <script src="https://unpkg.com/gtfs-realtime-pbf-js-module@1.0.0/gtfs-realtime.browser.proto.js"></script>
+  <script type="module" src="./script.js"></script>
 
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <!-- partial:index.partial.html -->
-    <div id="viewDiv">
-      <div id="countdownTimer" class="countdownTimer"></div>
-    </div>
-    <a href="https://shivasurya.me">By Shiva</a>
-  </body>
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-1QF4G29NSG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-1QF4G29NSG');
+  </script>
+</head>
+
+<body>
+  <!-- partial:index.partial.html -->
+  <div id="viewDiv">
+    <div id="countdownTimer" class="countdownTimer"></div>
+  </div>
+  <a href="https://shivasurya.me">By Shiva</a>
+</body>
+
 </html>
