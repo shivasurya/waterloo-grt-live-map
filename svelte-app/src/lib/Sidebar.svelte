@@ -343,32 +343,40 @@
   }
 
   @media (max-width: 640px) {
-    .sidebar:not(.collapsed) {
-      width: 100%;
-      max-height: 55vh;
-      height: auto;
-      bottom: 0;
+    .sidebar {
       top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: auto;
+    }
+
+    .sidebar:not(.collapsed) {
+      max-height: 45vh;
     }
 
     .sidebar-content {
       border-right: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 1.25rem 1.25rem 0 0;
-      max-height: 55vh;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1rem 1rem 0 0;
+      max-height: 45vh;
+      padding-bottom: env(safe-area-inset-bottom, 0.5rem);
     }
 
     .header {
-      padding-top: 1rem;
+      padding: 0.75rem 1.25rem 0.5rem;
     }
 
     .toggle-btn {
-      top: auto;
-      bottom: 5rem;
+      position: fixed;
+      top: 0.75rem;
+      left: 0.75rem;
+      bottom: auto;
     }
 
-    .sidebar.collapsed .toggle-btn {
-      bottom: 5rem;
+    .route-list {
+      padding-bottom: env(safe-area-inset-bottom, 1rem);
     }
   }
 </style>
