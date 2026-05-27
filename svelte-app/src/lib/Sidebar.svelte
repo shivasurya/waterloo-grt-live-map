@@ -22,16 +22,18 @@
 
   function selectRoute(routeId) {
     selectedRoute = selectedRoute === routeId ? '' : routeId;
+    if (selectedRoute) collapsed = true;
   }
 
   function clearFilter() {
     selectedRoute = '';
     search = '';
+    collapsed = true;
   }
 </script>
 
 <div class="sidebar" class:collapsed>
-  <button class="toggle-btn" onclick={() => (collapsed = !collapsed)} aria-label={collapsed ? 'Open route panel' : 'Close route panel'}>
+  <button class="toggle-btn" onclick={() => { if (!collapsed) { selectedRoute = ''; search = ''; } collapsed = !collapsed; }} aria-label={collapsed ? 'Open route panel' : 'Close route panel'}>
     {#if collapsed}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     {:else}
