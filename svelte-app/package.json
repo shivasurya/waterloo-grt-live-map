@@ -1,0 +1,21 @@
+{
+  "name": "svelte-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "svelte": "^5.55.5",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "gtfs-realtime-pbf-js-module": "^1.0.0",
+    "mapbox-gl": "^3.24.0",
+    "pbf": "^5.0.0"
+  }
+}
