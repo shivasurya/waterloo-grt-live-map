@@ -6,5 +6,12 @@ export default defineConfig({
   build: {
     outDir: '../docs',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('mapbox-gl')) return 'mapbox';
+        },
+      },
+    },
   },
 })
