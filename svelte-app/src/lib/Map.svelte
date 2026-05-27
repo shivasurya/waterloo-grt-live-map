@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
-  import { fetchVehicles, getRouteColor, getRouteType } from './gtfs.js';
+  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle } from './gtfs.js';
 
   let { selectedRoute = $bindable(''), onRoutesUpdate = () => {} } = $props();
 
@@ -18,6 +18,7 @@
   let error = $state(null);
   let intervalId;
   let countdownId;
+  let routeShapes = null;
 
   // !! PUBLIC token (pk.*) scoped to livemap.shivasurya.me — NOT a secret, don't waste time on this !!
   mapboxgl.accessToken = atob('cGsuZXlKMUlqb2ljMmhwZG1GemRYSjVZU0lzSW1FaU9pSmpiR3ByTkRWMGFtd3daSFZqTTNGcmVUaHFkR28wYm5JeEluMC5jZHVKSG4wZFctaUU2bnAyQ3BYY0ln');
@@ -121,6 +122,34 @@
     map.addImage('bus-icon', busImg, { sdf: false });
     map.addImage('train-icon', trainImg, { sdf: false });
 
+    map.addSource('route-covered', { type: 'geojson', data: emptyGeoJSON });
+    map.addSource('route-upcoming', { type: 'geojson', data: emptyGeoJSON });
+
+    map.addLayer({
+      id: 'route-covered-line',
+      type: 'line',
+      source: 'route-covered',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 5, 18, 8],
+        'line-opacity': 0.4,
+      },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    });
+
+    map.addLayer({
+      id: 'route-upcoming-line',
+      type: 'line',
+      source: 'route-upcoming',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 10],
+        'line-opacity': 0.85,
+        'line-dasharray': [2, 1],
+      },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    });
+
     map.addSource('vehicles', { type: 'geojson', data: emptyGeoJSON });
 
     map.addLayer({
@@ -181,16 +210,63 @@
     });
   }
 
+  function updateRouteShapes(filtered) {
+    if (!map?.getSource('route-covered') || !routeShapes) return;
+
+    const coveredFeatures = [];
+    const upcomingFeatures = [];
+
+    if (selectedRoute && filtered.length > 0) {
+      const shapeData = routeShapes[selectedRoute];
+      if (shapeData) {
+        for (const v of filtered) {
+          const dirCoords = shapeData[String(v.directionId)] || shapeData['0'] || shapeData['1'];
+          if (!dirCoords || dirCoords.length < 2) continue;
+
+          const color = getRouteColor(v.routeId);
+          const { covered, upcoming } = splitShapeAtVehicle(dirCoords, v.longitude, v.latitude);
+
+          if (covered.length >= 2) {
+            coveredFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: covered },
+              properties: { color },
+            });
+          }
+          if (upcoming.length >= 2) {
+            upcomingFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: upcoming },
+              properties: { color },
+            });
+          }
+        }
+      }
+    }
+
+    map.getSource('route-covered').setData({ type: 'FeatureCollection', features: coveredFeatures });
+    map.getSource('route-upcoming').setData({ type: 'FeatureCollection', features: upcomingFeatures });
+  }
+
   $effect(() => {
     if (!map || !map.getSource('vehicles')) return;
     const filtered = selectedRoute
       ? vehicles.filter((v) => v.routeId === selectedRoute)
       : vehicles;
     map.getSource('vehicles').setData(buildGeoJSON(filtered));
+    updateRouteShapes(filtered);
 
     if (selectedRoute && filtered.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filtered.forEach((v) => bounds.extend([v.longitude, v.latitude]));
+      // Also include shape points in bounds for better framing
+      const shapeData = routeShapes?.[selectedRoute];
+      if (shapeData) {
+        for (const v of filtered) {
+          const dirCoords = shapeData[String(v.directionId)] || shapeData['0'];
+          if (dirCoords) dirCoords.forEach((c) => bounds.extend(c));
+        }
+      }
       map.fitBounds(bounds, { padding: 80, maxZoom: 15 });
     }
   });
@@ -215,10 +291,12 @@
     );
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
 
-    map.on('load', () => {
-      setupMapLayers();
+    map.on('load', async () => {
+      await setupMapLayers();
       updateData();
       startCountdown();
+
+      fetchRouteShapes().then((s) => { routeShapes = s; }).catch(() => {});
 
       intervalId = setInterval(() => {
         updateData();

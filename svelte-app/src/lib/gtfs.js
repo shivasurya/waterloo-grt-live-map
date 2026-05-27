@@ -57,3 +57,52 @@ export function getRouteType(routeId) {
   if (num >= 50) return 'Express';
   return 'Local';
 }
+
+let shapesCache = null;
+
+export async function fetchRouteShapes() {
+  if (shapesCache) return shapesCache;
+  const res = await fetch('/route-shapes.json');
+  if (!res.ok) throw new Error(`Shapes: HTTP ${res.status}`);
+  shapesCache = await res.json();
+  return shapesCache;
+}
+
+function distSq(a, b) {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return dx * dx + dy * dy;
+}
+
+function projectOnSegment(p, a, b) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return { t: 0, dist: distSq(p, a) };
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / lenSq));
+  const proj = [a[0] + t * dx, a[1] + t * dy];
+  return { t, dist: distSq(p, proj), point: proj };
+}
+
+export function splitShapeAtVehicle(shapeCoords, vehicleLng, vehicleLat) {
+  const pos = [vehicleLng, vehicleLat];
+  let bestDist = Infinity;
+  let bestIdx = 0;
+  let bestT = 0;
+  let bestPoint = shapeCoords[0];
+
+  for (let i = 0; i < shapeCoords.length - 1; i++) {
+    const { t, dist, point } = projectOnSegment(pos, shapeCoords[i], shapeCoords[i + 1]);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+      bestT = t;
+      bestPoint = point;
+    }
+  }
+
+  const covered = shapeCoords.slice(0, bestIdx + 1).concat([bestPoint]);
+  const upcoming = [bestPoint].concat(shapeCoords.slice(bestIdx + 1));
+
+  return { covered, upcoming };
+}
