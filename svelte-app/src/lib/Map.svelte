@@ -18,7 +18,7 @@
   let error = $state(null);
   let intervalId;
   let countdownId;
-  let routeShapes = null;
+  let routeShapes = $state(null);
 
   // !! PUBLIC token (pk.*) scoped to livemap.shivasurya.me — NOT a secret, don't waste time on this !!
   mapboxgl.accessToken = atob('cGsuZXlKMUlqb2ljMmhwZG1GemRYSjVZU0lzSW1FaU9pSmpiR3ByTkRWMGFtd3daSFZqTTNGcmVUaHFkR28wYm5JeEluMC5jZHVKSG4wZFctaUU2bnAyQ3BYY0ln');
@@ -210,14 +210,27 @@
     });
   }
 
-  function updateRouteShapes(filtered) {
-    if (!map?.getSource('route-covered') || !routeShapes) return;
+  $effect(() => {
+    if (!map || !map.getSource('vehicles')) return;
 
+    // Read all reactive deps explicitly so Svelte tracks them
+    const route = selectedRoute;
+    const veh = vehicles;
+    const shapes = routeShapes;
+
+    const filtered = route
+      ? veh.filter((v) => v.routeId === route)
+      : veh;
+
+    map.getSource('vehicles').setData(buildGeoJSON(filtered));
+
+    // Update route path lines
+    const emptyCollection = { type: 'FeatureCollection', features: [] };
     const coveredFeatures = [];
     const upcomingFeatures = [];
 
-    if (selectedRoute && filtered.length > 0) {
-      const shapeData = routeShapes[selectedRoute];
+    if (route && filtered.length > 0 && shapes) {
+      const shapeData = shapes[route];
       if (shapeData) {
         for (const v of filtered) {
           const dirCoords = shapeData[String(v.directionId)] || shapeData['0'] || shapeData['1'];
@@ -244,26 +257,19 @@
       }
     }
 
-    map.getSource('route-covered').setData({ type: 'FeatureCollection', features: coveredFeatures });
-    map.getSource('route-upcoming').setData({ type: 'FeatureCollection', features: upcomingFeatures });
-  }
+    map.getSource('route-covered')?.setData(
+      coveredFeatures.length > 0 ? { type: 'FeatureCollection', features: coveredFeatures } : emptyCollection
+    );
+    map.getSource('route-upcoming')?.setData(
+      upcomingFeatures.length > 0 ? { type: 'FeatureCollection', features: upcomingFeatures } : emptyCollection
+    );
 
-  $effect(() => {
-    if (!map || !map.getSource('vehicles')) return;
-    const filtered = selectedRoute
-      ? vehicles.filter((v) => v.routeId === selectedRoute)
-      : vehicles;
-    map.getSource('vehicles').setData(buildGeoJSON(filtered));
-    updateRouteShapes(filtered);
-
-    if (selectedRoute && filtered.length > 0) {
+    if (route && filtered.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filtered.forEach((v) => bounds.extend([v.longitude, v.latitude]));
-      // Also include shape points in bounds for better framing
-      const shapeData = routeShapes?.[selectedRoute];
-      if (shapeData) {
+      if (shapes?.[route]) {
         for (const v of filtered) {
-          const dirCoords = shapeData[String(v.directionId)] || shapeData['0'];
+          const dirCoords = shapes[route][String(v.directionId)] || shapes[route]['0'];
           if (dirCoords) dirCoords.forEach((c) => bounds.extend(c));
         }
       }
