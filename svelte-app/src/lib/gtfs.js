@@ -28,7 +28,8 @@ export async function fetchVehicles() {
 }
 
 const ROUTE_COLORS = {
-  '301': '#dc2626', '302': '#dc2626',
+  '301': '#dc2626',
+  '302': '#7c3aed',
   '201': '#7c3aed', '202': '#7c3aed', '204': '#7c3aed', '205': '#7c3aed', '206': '#7c3aed',
 };
 
@@ -51,8 +52,8 @@ export function getRouteColor(routeId) {
 }
 
 export function getRouteType(routeId) {
+  if (routeId === '301') return 'LRT';
   const num = parseInt(routeId);
-  if (num >= 300) return 'LRT';
   if (num >= 200) return 'iXpress';
   if (num >= 50) return 'Express';
   return 'Local';
