@@ -1,21 +1,23 @@
-/* Security Enthusiasts: I want to save your time here
-   This mapbox access token is supposed to be used on public domains and doesn't have any additional scope.
-   This token is scoped for livemap.shivasurya.me. Thanks for your time
-*/
-mapboxgl.accessToken =
-  "pk.eyJ1Ijoic2hpdmFzdXJ5YSIsImEiOiJjbGprNDV0amwwZHVjM3FreThqdGo0bnIxIn0.cduJHn0dW-iE6np2CpXcIg";
+const DEFAULT_LAT = 43.4643;
+const DEFAULT_LNG = -80.5204;
 
 const protobufUpdate = async () => {
   const url =
     "https://livemap.shivasurya.workers.dev/?cacheBust=" + new Date().getTime();
-  let response = await fetch(url);
-  if (response.ok) {
-    const bufferRes = await response.arrayBuffer();
-    const pbf = new Pbf(new Uint8Array(bufferRes));
-    const obj = FeedMessage.read(pbf);
-    return obj.entity;
-  } else {
-    console.error("error:", response.status);
+  try {
+    let response = await fetch(url);
+    if (response.ok) {
+      const bufferRes = await response.arrayBuffer();
+      const pbf = new Pbf(new Uint8Array(bufferRes));
+      const obj = FeedMessage.read(pbf);
+      return obj.entity;
+    } else {
+      console.error("error:", response.status);
+      return [];
+    }
+  } catch (err) {
+    console.error("fetch failed:", err);
+    return [];
   }
 };
 
@@ -31,32 +33,33 @@ const resetTimer = () => {
   }, 1000);
 };
 
+let map;
+let clickHandlerAdded = false;
+
 function getLocation() {
-  if(window.gtag) {
-    gtag('event', 'page_view'); 
+  if (window.gtag) {
+    gtag("event", "page_view");
   }
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(showPosition);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        main(position.coords.latitude, position.coords.longitude);
+        new mapboxgl.Marker()
+          .setLngLat([position.coords.longitude, position.coords.latitude])
+          .addTo(map);
+      },
+      () => {
+        main(DEFAULT_LAT, DEFAULT_LNG);
+      }
+    );
   } else {
-    x.innerHTML = "Geolocation is not supported by this browser.";
+    main(DEFAULT_LAT, DEFAULT_LNG);
   }
 }
 
-let map;
-
-function showPosition(position) {
-  main(position.coords.latitude, position.coords.longitude);
-
-  const currentLocationMarker = new mapboxgl.Marker()
-    .setLngLat([position.coords.longitude, position.coords.latitude])
-    .addTo(map); // Add it to the map
-}
-
-// Removes all the graphics, calls the API to get the data,
-// and adds all the Graphics to the input graphicsLayer.
 const updateLayer = async (map) => {
   const locations = await protobufUpdate();
-  // console.log("locations:", locations);
+  if (!locations || locations.length === 0) return;
 
   const features = locations.map((locationObject) => {
     return {
@@ -75,28 +78,26 @@ const updateLayer = async (map) => {
     };
   });
 
+  const geojson = {
+    type: "FeatureCollection",
+    features: features,
+  };
+
   const source = map.getSource("locations");
-  console.log(source);
   if (source) {
-    // Source exists
-    source.setData({
-      type: "FeatureCollection",
-      features: features,
-    });
+    source.setData(geojson);
   } else {
-    // Add GeoJSON source with features
     map.addSource("locations", {
       type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: features,
-      },
+      data: geojson,
     });
 
     map.loadImage("./bus.webp", (error, image) => {
-      if (error) throw error;
+      if (error) {
+        console.error("Failed to load bus icon:", error);
+        return;
+      }
 
-      // Add the image to the map style.
       map.addImage("mapbox-icons", image);
 
       map.addLayer({
@@ -111,28 +112,34 @@ const updateLayer = async (map) => {
     });
   }
 
-  const popup = new mapboxgl.Popup();
-  map.on("click", "locations", (e) => {
-    const coordinates = e.features[0].geometry.coordinates.slice();
-    console.log(e.features[0].properties);
-    const name = e.features[0].properties.name;
-    popup.setLngLat(coordinates).setHTML(name).addTo(map);
-  });
+  if (!clickHandlerAdded) {
+    clickHandlerAdded = true;
+    const popup = new mapboxgl.Popup();
+    map.on("click", "locations", (e) => {
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const name = e.features[0].properties.name;
+      popup.setLngLat(coordinates).setHTML(name).addTo(map);
+    });
+  }
 };
 
 const main = async (latitude, longitude) => {
-  const viewOptions = {
+  map = new mapboxgl.Map({
     container: "viewDiv",
     style: "mapbox://styles/mapbox/streets-v11",
     center: [longitude, latitude],
     zoom: 14,
-  };
+  });
 
-  map = new mapboxgl.Map(viewOptions);
-
-  setInterval(() => {
+  map.on("load", () => {
     updateLayer(map);
     resetTimer();
-  }, 10000);
+
+    setInterval(() => {
+      updateLayer(map);
+      resetTimer();
+    }, 10000);
+  });
 };
+
 getLocation();
