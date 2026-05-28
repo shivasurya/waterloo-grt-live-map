@@ -21,6 +21,9 @@
   let countdownId;
   let routeShapes = $state(null);
   let tripDirections = $state(null);
+  // vehicleId -> { lng, lat, dir? } from previous update, used to infer direction
+  // for vehicles whose trip_id isn't in the static lookup (mainly ION trains).
+  const vehicleHistory = new Map();
 
   // !! PUBLIC token (pk.*) scoped to livemap.shivasurya.me — NOT a secret, don't waste time on this !!
   mapboxgl.accessToken = atob('cGsuZXlKMUlqb2ljMmhwZG1GemRYSjVZU0lzSW1FaU9pSmpiR3ByTkRWMGFtd3daSFZqTTNGcmVUaHFkR28wYm5JeEluMC5jZHVKSG4wZFctaUU2bnAyQ3BYY0ln');
@@ -74,18 +77,60 @@
     </svg>`;
   }
 
+  // Bearing between two lng/lat points, degrees (0 = north, 90 = east)
+  function bearingBetween(a, b) {
+    const toRad = (x) => (x * Math.PI) / 180;
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+    const dLng = toRad(b[0] - a[0]);
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
+  }
+
+  function angleDiff(a, b) {
+    const d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
+
+  // For trains/buses whose trip_id we can't look up (ION), infer direction by
+  // comparing actual movement bearing to each direction shape's bearing at this point.
+  function inferDirectionFromMovement(shapes, routeId, lng, lat, prevLng, prevLat) {
+    const route = shapes?.[routeId];
+    if (!route) return null;
+    const s0 = getRouteShape(shapes, routeId, 0);
+    const s1 = getRouteShape(shapes, routeId, 1);
+    if (!s0 || !s1) return s0 ? 0 : (s1 ? 1 : null);
+
+    const movementBearing = bearingBetween([prevLng, prevLat], [lng, lat]);
+    const b0 = bearingFromShape(s0.shape, lng, lat);
+    const b1 = bearingFromShape(s1.shape, lng, lat);
+    return angleDiff(movementBearing, b0) <= angleDiff(movementBearing, b1) ? 0 : 1;
+  }
+
   function enrichVehicle(v, shapes, tripDirs) {
-    // GRT realtime feed reports direction_id=0 for every vehicle (broken).
-    // Use trip_id → direction lookup from static GTFS as ground truth.
-    // Fall back to geometric inference only if trip_id isn't in the static map.
+    // GRT realtime feed reports direction_id=0 for every vehicle. Strategy:
+    //   1. trip_id → direction from static GTFS (works for buses)
+    //   2. Last known position → compute actual movement direction (ION fallback)
+    //   3. Geometric closeness to either shape (final fallback)
     let dir = lookupDirection(tripDirs, v.tripId);
+    const prev = vehicleHistory.get(v.vehicleId);
+    const moved = prev && (prev.lng !== v.longitude || prev.lat !== v.latitude);
+
+    if (dir === null && shapes && prev && moved) {
+      dir = inferDirectionFromMovement(shapes, v.routeId, v.longitude, v.latitude, prev.lng, prev.lat);
+    }
     if (dir === null) {
-      if (shapes) {
+      if (prev && prev.dir !== undefined) {
+        dir = prev.dir; // stable when stationary
+      } else if (shapes) {
         dir = inferDirection(shapes, v.routeId, v.longitude, v.latitude, v.directionId);
       } else {
         dir = v.directionId;
       }
     }
+
+    vehicleHistory.set(v.vehicleId, { lng: v.longitude, lat: v.latitude, dir });
 
     let bearing = v.bearing || 0;
     let terminus = '';
