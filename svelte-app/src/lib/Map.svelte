@@ -11,6 +11,7 @@
 
   let mapContainer;
   let map;
+  let mapReady = $state(false);
   let vehicles = $state([]);
   let countdown = $state(REFRESH_INTERVAL);
   let lastUpdate = $state(null);
@@ -91,13 +92,6 @@
         (a, b) => parseInt(a) - parseInt(b)
       );
       onRoutesUpdate(routes);
-
-      if (map?.getSource('vehicles')) {
-        const filtered = selectedRoute
-          ? data.filter((v) => v.routeId === selectedRoute)
-          : data;
-        map.getSource('vehicles').setData(buildGeoJSON(filtered));
-      }
     } catch (err) {
       console.error('Failed to fetch vehicles:', err);
       error = err.message;
@@ -211,9 +205,8 @@
   }
 
   $effect(() => {
-    if (!map || !map.getSource('vehicles')) return;
+    if (!mapReady) return;
 
-    // Read all reactive deps explicitly so Svelte tracks them
     const route = selectedRoute;
     const veh = vehicles;
     const shapes = routeShapes;
@@ -299,10 +292,11 @@
 
     map.on('load', async () => {
       await setupMapLayers();
+      mapReady = true;
       updateData();
       startCountdown();
 
-      fetchRouteShapes().then((s) => { routeShapes = s; }).catch(() => {});
+      fetchRouteShapes().then((s) => { routeShapes = s; }).catch((err) => console.error('Failed to load route shapes:', err));
 
       intervalId = setInterval(() => {
         updateData();
@@ -338,7 +332,7 @@
   <div class="status-bar">
     <div class="status-pill">
       <span class="pulse-dot"></span>
-      <span>{vehicles.length} buses</span>
+      <span>{vehicles.length} buses & trains</span>
     </div>
     <div class="status-pill countdown-pill">
       {countdown}s
