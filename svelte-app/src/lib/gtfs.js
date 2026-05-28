@@ -143,6 +143,23 @@ export function getRouteShape(shapes, routeId, directionId) {
   return dir;
 }
 
+// Drop GRT's verbose suffixes for cleaner popup text
+function cleanStopName(name) {
+  if (!name) return '';
+  return name
+    .replace(/\s*-\s*Door\s*\d+.*$/i, '')
+    .replace(/\s*Station$/i, '')
+    .replace(/\s*\/\s*.*$/, '')
+    .trim();
+}
+
+export function getTerminus(shapes, routeId, directionId) {
+  const data = getRouteShape(shapes, routeId, directionId);
+  if (!data?.stops?.length) return null;
+  const last = data.stops[data.stops.length - 1];
+  return cleanStopName(last[2]);
+}
+
 function distSq(a, b) {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];

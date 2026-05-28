@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
-  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape, inferDirection, bearingFromShape } from './gtfs.js';
+  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape, inferDirection, bearingFromShape, getTerminus } from './gtfs.js';
 
   let { selectedRoute = $bindable(''), onRoutesUpdate = () => {} } = $props();
 
@@ -75,36 +75,54 @@
 
   function enrichVehicle(v, shapes) {
     // GRT feed reports direction_id=0 and bearing=0 for everyone — compute both
-    // from the route shape so we can color and rotate properly.
+    // from the route shape so we can color, rotate, and label towards-direction.
     let dir = v.directionId;
     let bearing = v.bearing || 0;
+    let terminus = '';
     if (shapes) {
       dir = inferDirection(shapes, v.routeId, v.longitude, v.latitude, v.directionId);
       const shapeData = getRouteShape(shapes, v.routeId, dir);
       if (shapeData) {
         bearing = bearingFromShape(shapeData.shape, v.longitude, v.latitude);
       }
+      terminus = getTerminus(shapes, v.routeId, dir) || '';
     }
-    return { ...v, directionId: dir, bearing };
+    return { ...v, directionId: dir, bearing, terminus };
+  }
+
+  // Nudge each vehicle perpendicular to its bearing so opposite-direction buses
+  // running on the same road don't sit on top of each other.
+  function perpendicularOffset(lng, lat, bearingDeg, directionId, meters = 12) {
+    const side = Number(directionId) === 1 ? -1 : 1;
+    // Perpendicular bearing: bearing + 90° (right side) for dir 0, -90° for dir 1
+    const perp = ((bearingDeg + 90 * side) % 360 + 360) % 360;
+    const rad = (perp * Math.PI) / 180;
+    const dLat = (meters * Math.cos(rad)) / 111320;
+    const dLng = (meters * Math.sin(rad)) / (111320 * Math.cos((lat * Math.PI) / 180));
+    return [lng + dLng, lat + dLat];
   }
 
   function buildGeoJSON(data) {
     return {
       type: 'FeatureCollection',
-      features: data.map((v) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [v.longitude, v.latitude] },
-        properties: {
-          routeId: v.routeId,
-          vehicleId: v.vehicleId,
-          bearing: v.bearing || 0,
-          speed: v.speed,
-          directionId: v.directionId,
-          routeType: getRouteType(v.routeId),
-          color: getDirectionColor(v.routeId, v.directionId),
-          icon: getRouteType(v.routeId) === 'LRT' ? 'train-icon' : 'bus-icon',
-        },
-      })),
+      features: data.map((v) => {
+        const coords = perpendicularOffset(v.longitude, v.latitude, v.bearing || 0, v.directionId);
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: coords },
+          properties: {
+            routeId: v.routeId,
+            vehicleId: v.vehicleId,
+            bearing: v.bearing || 0,
+            speed: v.speed,
+            directionId: v.directionId,
+            terminus: v.terminus || '',
+            routeType: getRouteType(v.routeId),
+            color: getDirectionColor(v.routeId, v.directionId),
+            icon: getRouteType(v.routeId) === 'LRT' ? 'train-icon' : 'bus-icon',
+          },
+        };
+      }),
     };
   }
 
@@ -150,6 +168,13 @@
     map.addSource('route-upcoming', { type: 'geojson', data: emptyGeoJSON });
     map.addSource('route-stops', { type: 'geojson', data: emptyGeoJSON });
 
+    // Offset parallel direction lines so they don't overlap.
+    // Direction 0 shifts right (+), direction 1 shifts left (-).
+    const lineOffset = ['case',
+      ['==', ['get', 'directionId'], 1], ['interpolate', ['linear'], ['zoom'], 10, -2, 14, -5, 18, -9],
+      ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 5, 18, 9],
+    ];
+
     map.addLayer({
       id: 'route-covered-line',
       type: 'line',
@@ -158,6 +183,7 @@
         'line-color': ['get', 'color'],
         'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 10],
         'line-opacity': 0.5,
+        'line-offset': lineOffset,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -170,6 +196,7 @@
         'line-color': ['get', 'color'],
         'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 7, 18, 12],
         'line-opacity': 0.95,
+        'line-offset': lineOffset,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -190,7 +217,7 @@
 
     map.addSource('vehicles', { type: 'geojson', data: emptyGeoJSON });
 
-    // Direction arrow — drawn beneath the bus, offset and rotated by bearing
+    // Direction arrow — drawn beneath the bus, rotated by bearing
     map.addLayer({
       id: 'vehicle-arrows',
       type: 'symbol',
@@ -211,7 +238,7 @@
       },
     });
 
-    // Bus/train icon — non-rotated, colored, with route number label
+    // Bus/train icon — non-rotated, recognizable
     map.addLayer({
       id: 'vehicle-icons',
       type: 'symbol',
@@ -247,13 +274,15 @@
       const coords = e.features[0].geometry.coordinates.slice();
       const isLRT = props.routeType === 'LRT';
       const label = isLRT ? 'Train' : 'Bus';
-      const dirLabel = String(props.directionId) === '0' ? 'Outbound' : 'Inbound';
+      const towards = props.terminus
+        ? `Towards ${props.terminus}`
+        : (String(props.directionId) === '0' ? 'Outbound' : 'Inbound');
       popup
         .setLngLat(coords)
         .setHTML(
           `<div class="popup-content">
             <span class="popup-badge" style="background:${props.color}">Route ${props.routeId}</span>
-            <span class="popup-dir">${dirLabel}</span>
+            <span class="popup-dir">${towards}</span>
             <span class="popup-vehicle">${label} #${props.vehicleId}</span>
           </div>`
         )
@@ -339,18 +368,19 @@
         for (const dv of dirVehicles) {
           const { covered, upcoming } = splitShapeAtVehicle(data.shape, dv.longitude, dv.latitude);
 
+          const dirNum = Number(dv.directionId) || 0;
           if (covered.length >= 2) {
             coveredFeatures.push({
               type: 'Feature',
               geometry: { type: 'LineString', coordinates: covered },
-              properties: { color: lightColor },
+              properties: { color: lightColor, directionId: dirNum },
             });
           }
           if (upcoming.length >= 2) {
             upcomingFeatures.push({
               type: 'Feature',
               geometry: { type: 'LineString', coordinates: upcoming },
-              properties: { color: dirColor },
+              properties: { color: dirColor, directionId: dirNum },
             });
           }
         }
