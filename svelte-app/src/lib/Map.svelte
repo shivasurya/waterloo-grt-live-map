@@ -11,6 +11,7 @@
 
   let mapContainer;
   let map;
+  let mapReady = $state(false);
   let vehicles = $state([]);
   let countdown = $state(REFRESH_INTERVAL);
   let lastUpdate = $state(null);
@@ -204,9 +205,8 @@
   }
 
   $effect(() => {
-    if (!map || !map.getSource('vehicles')) return;
+    if (!mapReady) return;
 
-    // Read all reactive deps explicitly so Svelte tracks them
     const route = selectedRoute;
     const veh = vehicles;
     const shapes = routeShapes;
@@ -292,6 +292,7 @@
 
     map.on('load', async () => {
       await setupMapLayers();
+      mapReady = true;
       updateData();
       startCountdown();
 
