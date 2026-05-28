@@ -124,6 +124,7 @@ export function lightenColor(hex, amount = 30) {
 }
 
 let shapesCache = null;
+let tripDirsCache = null;
 
 export async function fetchRouteShapes() {
   if (shapesCache) return shapesCache;
@@ -131,6 +132,21 @@ export async function fetchRouteShapes() {
   if (!res.ok) throw new Error(`Shapes: HTTP ${res.status}`);
   shapesCache = await res.json();
   return shapesCache;
+}
+
+export async function fetchTripDirections() {
+  if (tripDirsCache) return tripDirsCache;
+  const res = await fetch('/trip-directions.json');
+  if (!res.ok) throw new Error(`Trip dirs: HTTP ${res.status}`);
+  tripDirsCache = await res.json();
+  return tripDirsCache;
+}
+
+export function lookupDirection(tripDirs, tripId) {
+  if (!tripDirs || !tripId) return null;
+  const d = tripDirs[tripId];
+  if (d === undefined) return null;
+  return Number(d);
 }
 
 export function getRouteShape(shapes, routeId, directionId) {

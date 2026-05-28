@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
-  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape, inferDirection, bearingFromShape, getTerminus } from './gtfs.js';
+  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape, inferDirection, bearingFromShape, getTerminus, fetchTripDirections, lookupDirection } from './gtfs.js';
 
   let { selectedRoute = $bindable(''), onRoutesUpdate = () => {} } = $props();
 
@@ -20,6 +20,7 @@
   let intervalId;
   let countdownId;
   let routeShapes = $state(null);
+  let tripDirections = $state(null);
 
   // !! PUBLIC token (pk.*) scoped to livemap.shivasurya.me — NOT a secret, don't waste time on this !!
   mapboxgl.accessToken = atob('cGsuZXlKMUlqb2ljMmhwZG1GemRYSjVZU0lzSW1FaU9pSmpiR3ByTkRWMGFtd3daSFZqTTNGcmVUaHFkR28wYm5JeEluMC5jZHVKSG4wZFctaUU2bnAyQ3BYY0ln');
@@ -73,14 +74,22 @@
     </svg>`;
   }
 
-  function enrichVehicle(v, shapes) {
-    // GRT feed reports direction_id=0 and bearing=0 for everyone — compute both
-    // from the route shape so we can color, rotate, and label towards-direction.
-    let dir = v.directionId;
+  function enrichVehicle(v, shapes, tripDirs) {
+    // GRT realtime feed reports direction_id=0 for every vehicle (broken).
+    // Use trip_id → direction lookup from static GTFS as ground truth.
+    // Fall back to geometric inference only if trip_id isn't in the static map.
+    let dir = lookupDirection(tripDirs, v.tripId);
+    if (dir === null) {
+      if (shapes) {
+        dir = inferDirection(shapes, v.routeId, v.longitude, v.latitude, v.directionId);
+      } else {
+        dir = v.directionId;
+      }
+    }
+
     let bearing = v.bearing || 0;
     let terminus = '';
     if (shapes) {
-      dir = inferDirection(shapes, v.routeId, v.longitude, v.latitude, v.directionId);
       const shapeData = getRouteShape(shapes, v.routeId, dir);
       if (shapeData) {
         bearing = bearingFromShape(shapeData.shape, v.longitude, v.latitude);
@@ -334,13 +343,14 @@
     const route = selectedRoute;
     const veh = vehicles;
     const shapes = routeShapes;
+    const tripDirs = tripDirections;
 
     const baseFiltered = route
       ? veh.filter((v) => v.routeId === route)
       : veh;
 
-    // Override direction_id + bearing using shape geometry (feed reports both as 0)
-    const filtered = baseFiltered.map((v) => enrichVehicle(v, shapes));
+    // Use trip_id → direction lookup (ground truth) + shape-derived bearing
+    const filtered = baseFiltered.map((v) => enrichVehicle(v, shapes, tripDirs));
 
     map.getSource('vehicles').setData(buildGeoJSON(filtered));
 
@@ -449,6 +459,7 @@
       startCountdown();
 
       fetchRouteShapes().then((s) => { routeShapes = s; }).catch((err) => console.error('Failed to load route shapes:', err));
+      fetchTripDirections().then((t) => { tripDirections = t; }).catch((err) => console.error('Failed to load trip directions:', err));
 
       intervalId = setInterval(() => {
         updateData();
