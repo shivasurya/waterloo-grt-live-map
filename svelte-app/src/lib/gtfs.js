@@ -179,5 +179,45 @@ export function splitShapeAtVehicle(shapeCoords, vehicleLng, vehicleLat) {
   const covered = shapeCoords.slice(0, bestIdx + 1).concat([bestPoint]);
   const upcoming = [bestPoint].concat(shapeCoords.slice(bestIdx + 1));
 
-  return { covered, upcoming };
+  return { covered, upcoming, segmentIdx: bestDist === Infinity ? -1 : bestIdx, dist: bestDist };
+}
+
+// Returns the better-matching direction (0 or 1) for a vehicle by comparing
+// distance to both shapes. Falls back to claimed directionId if only one exists.
+export function inferDirection(shapes, routeId, vehicleLng, vehicleLat, claimedDirectionId) {
+  const route = shapes?.[routeId];
+  if (!route) return claimedDirectionId;
+
+  const dir0 = route['0'];
+  const dir1 = route['1'];
+
+  const get = (d) => (Array.isArray(d) ? d : d?.shape);
+  const shape0 = get(dir0);
+  const shape1 = get(dir1);
+
+  if (!shape0 && !shape1) return claimedDirectionId;
+  if (!shape1) return 0;
+  if (!shape0) return 1;
+
+  const { dist: d0 } = splitShapeAtVehicle(shape0, vehicleLng, vehicleLat);
+  const { dist: d1 } = splitShapeAtVehicle(shape1, vehicleLng, vehicleLat);
+  return d0 <= d1 ? 0 : 1;
+}
+
+// Returns bearing (degrees, 0=north) at the vehicle's projected position on the shape.
+// Direction is the shape's natural forward direction.
+export function bearingFromShape(shapeCoords, vehicleLng, vehicleLat) {
+  if (!shapeCoords || shapeCoords.length < 2) return 0;
+  const { segmentIdx } = splitShapeAtVehicle(shapeCoords, vehicleLng, vehicleLat);
+  if (segmentIdx < 0) return 0;
+  const a = shapeCoords[segmentIdx];
+  const b = shapeCoords[segmentIdx + 1];
+  if (!a || !b) return 0;
+  // Convert lng/lat delta to bearing in degrees (north = 0, east = 90)
+  const lat1 = (a[1] * Math.PI) / 180;
+  const lat2 = (b[1] * Math.PI) / 180;
+  const dLng = ((b[0] - a[0]) * Math.PI) / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
 }

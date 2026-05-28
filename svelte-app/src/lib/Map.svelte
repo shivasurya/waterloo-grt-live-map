@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
-  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape } from './gtfs.js';
+  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape, inferDirection, bearingFromShape } from './gtfs.js';
 
   let { selectedRoute = $bindable(''), onRoutesUpdate = () => {} } = $props();
 
@@ -39,18 +39,53 @@
     });
   }
 
-  // Solid silhouette icons with arrow tip — pointing up (north). Rotated by bearing.
-  // SDF so we can recolor per-vehicle by direction.
+  // Recognizable bus icon — blue body, windows, wheels (non-SDF, full color)
   function busSvg() {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <path d="M32 4 L46 22 L42 22 L42 52 Q42 56 38 56 L26 56 Q22 56 22 52 L22 22 L18 22 Z" fill="white"/>
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="34" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+      <rect x="20" y="22" width="40" height="36" rx="8" fill="#0ea5e9"/>
+      <rect x="24" y="26" width="14" height="11" rx="2" fill="rgba(255,255,255,0.9)"/>
+      <rect x="42" y="26" width="14" height="11" rx="2" fill="rgba(255,255,255,0.9)"/>
+      <rect x="22" y="42" width="36" height="6" fill="rgba(0,0,0,0.2)"/>
+      <circle cx="28" cy="56" r="5" fill="#1e293b" stroke="white" stroke-width="2"/>
+      <circle cx="52" cy="56" r="5" fill="#1e293b" stroke="white" stroke-width="2"/>
     </svg>`;
   }
 
+  // Recognizable train icon — red ION train style
   function trainSvg() {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <path d="M32 4 L48 22 L44 22 L44 52 Q44 58 38 58 L26 58 Q20 58 20 52 L20 22 L16 22 Z" fill="white"/>
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="34" fill="white" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+      <rect x="18" y="18" width="44" height="44" rx="10" fill="#dc2626"/>
+      <rect x="22" y="22" width="36" height="14" rx="3" fill="rgba(255,255,255,0.9)"/>
+      <rect x="22" y="40" width="36" height="8" rx="2" fill="rgba(0,0,0,0.2)"/>
+      <circle cx="30" cy="56" r="3" fill="white"/>
+      <circle cx="50" cy="56" r="3" fill="white"/>
+      <line x1="40" y1="22" x2="40" y2="36" stroke="rgba(0,0,0,0.1)" stroke-width="2"/>
     </svg>`;
+  }
+
+  // Direction arrow — white triangle on colored background, SDF for recoloring
+  function arrowSvg() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="20" fill="white"/>
+      <path d="M24 8 L36 28 L24 22 L12 28 Z" fill="white"/>
+    </svg>`;
+  }
+
+  function enrichVehicle(v, shapes) {
+    // GRT feed reports direction_id=0 and bearing=0 for everyone — compute both
+    // from the route shape so we can color and rotate properly.
+    let dir = v.directionId;
+    let bearing = v.bearing || 0;
+    if (shapes) {
+      dir = inferDirection(shapes, v.routeId, v.longitude, v.latitude, v.directionId);
+      const shapeData = getRouteShape(shapes, v.routeId, dir);
+      if (shapeData) {
+        bearing = bearingFromShape(shapeData.shape, v.longitude, v.latitude);
+      }
+    }
+    return { ...v, directionId: dir, bearing };
   }
 
   function buildGeoJSON(data) {
@@ -104,10 +139,12 @@
   async function setupMapLayers() {
     const emptyGeoJSON = { type: 'FeatureCollection', features: [] };
 
-    const busImg = await createIconImage(busSvg(), 64);
-    const trainImg = await createIconImage(trainSvg(), 64);
-    map.addImage('bus-icon', busImg, { sdf: true });
-    map.addImage('train-icon', trainImg, { sdf: true });
+    const busImg = await createIconImage(busSvg(), 80);
+    const trainImg = await createIconImage(trainSvg(), 80);
+    const arrowImg = await createIconImage(arrowSvg(), 48);
+    map.addImage('bus-icon', busImg, { sdf: false });
+    map.addImage('train-icon', trainImg, { sdf: false });
+    map.addImage('arrow-icon', arrowImg, { sdf: true });
 
     map.addSource('route-covered', { type: 'geojson', data: emptyGeoJSON });
     map.addSource('route-upcoming', { type: 'geojson', data: emptyGeoJSON });
@@ -137,43 +174,60 @@
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
 
-    // Stop dots — only visible at moderate+ zoom
+    // Stop dots — bigger so they're visible
     map.addLayer({
       id: 'route-stops-circles',
       type: 'circle',
       source: 'route-stops',
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 3, 15, 5, 18, 8],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 2, 13, 5, 15, 7, 18, 10],
         'circle-color': '#ffffff',
         'circle-stroke-color': ['get', 'color'],
-        'circle-stroke-width': 2,
-        'circle-opacity': 0.95,
+        'circle-stroke-width': 2.5,
+        'circle-opacity': 1,
       },
     });
 
     map.addSource('vehicles', { type: 'geojson', data: emptyGeoJSON });
 
+    // Direction arrow — drawn beneath the bus, offset and rotated by bearing
+    map.addLayer({
+      id: 'vehicle-arrows',
+      type: 'symbol',
+      source: 'vehicles',
+      layout: {
+        'icon-image': 'arrow-icon',
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.35, 14, 0.55, 18, 0.9],
+        'icon-rotate': ['get', 'bearing'],
+        'icon-rotation-alignment': 'map',
+        'icon-offset': [0, -45],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-color': ['get', 'color'],
+        'icon-halo-color': 'rgba(0,0,0,0.4)',
+        'icon-halo-width': 1.5,
+      },
+    });
+
+    // Bus/train icon — non-rotated, colored, with route number label
     map.addLayer({
       id: 'vehicle-icons',
       type: 'symbol',
       source: 'vehicles',
       layout: {
         'icon-image': ['get', 'icon'],
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 14, 0.65, 18, 1],
-        'icon-rotate': ['get', 'bearing'],
-        'icon-rotation-alignment': 'map',
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.35, 14, 0.55, 18, 0.9],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'text-field': ['get', 'routeId'],
         'text-size': ['interpolate', ['linear'], ['zoom'], 10, 0, 12, 10, 14, 12, 18, 16],
         'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-        'text-offset': [0, 2.4],
+        'text-offset': [0, 2.2],
         'text-allow-overlap': false,
       },
       paint: {
-        'icon-color': ['get', 'color'],
-        'icon-halo-color': '#ffffff',
-        'icon-halo-width': 1.5,
         'text-color': '#e0e0e0',
         'text-halo-color': 'rgba(0,0,0,0.8)',
         'text-halo-width': 1.5,
@@ -215,6 +269,34 @@
       const routeId = e.features[0].properties.routeId;
       selectedRoute = selectedRoute === routeId ? '' : routeId;
     });
+
+    // Stop hover popup
+    const stopPopup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      className: 'vehicle-popup',
+      offset: 10,
+    });
+
+    map.on('mouseenter', 'route-stops-circles', (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      const props = e.features[0].properties;
+      const coords = e.features[0].geometry.coordinates.slice();
+      stopPopup
+        .setLngLat(coords)
+        .setHTML(
+          `<div class="popup-content">
+            <span class="popup-stop-dot" style="background:${props.color}"></span>
+            <span class="popup-stop-name">${props.name || 'Stop'}</span>
+          </div>`
+        )
+        .addTo(map);
+    });
+
+    map.on('mouseleave', 'route-stops-circles', () => {
+      map.getCanvas().style.cursor = '';
+      stopPopup.remove();
+    });
   }
 
   $effect(() => {
@@ -224,9 +306,12 @@
     const veh = vehicles;
     const shapes = routeShapes;
 
-    const filtered = route
+    const baseFiltered = route
       ? veh.filter((v) => v.routeId === route)
       : veh;
+
+    // Override direction_id + bearing using shape geometry (feed reports both as 0)
+    const filtered = baseFiltered.map((v) => enrichVehicle(v, shapes));
 
     map.getSource('vehicles').setData(buildGeoJSON(filtered));
 
@@ -532,5 +617,19 @@
   :global(.popup-vehicle) {
     color: #64748b;
     font-size: 0.7rem;
+  }
+
+  :global(.popup-stop-dot) {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  :global(.popup-stop-name) {
+    color: #e0e0e0;
+    font-size: 0.78rem;
+    font-weight: 500;
   }
 </style>
