@@ -33,19 +33,22 @@
 </script>
 
 <div class="sidebar" class:collapsed>
-  <button class="toggle-btn" onclick={() => { if (!collapsed) { selectedRoute = ''; search = ''; } collapsed = !collapsed; }} aria-label={collapsed ? 'Open route panel' : 'Close route panel'}>
-    {#if collapsed}
+  {#if collapsed}
+    <button class="toggle-btn" onclick={() => (collapsed = false)} aria-label="Open route panel">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    {:else}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    {/if}
-  </button>
-
-  {#if !collapsed}
+    </button>
+  {:else}
     <div class="sidebar-content">
       <div class="header">
-        <h1>GRT Live</h1>
-        <p class="subtitle">Waterloo Region Transit</p>
+        <div class="header-row">
+          <div>
+            <h1>GRT Live</h1>
+            <p class="subtitle">Waterloo Region Transit</p>
+          </div>
+          <button class="close-btn" onclick={() => { selectedRoute = ''; search = ''; collapsed = true; }} aria-label="Close route panel">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="search-box">
@@ -104,6 +107,7 @@
   {/if}
 </div>
 
+
 <style>
   .sidebar {
     position: absolute;
@@ -161,8 +165,33 @@
   }
 
   .header {
-    padding: 1.25rem 1.25rem 0.75rem;
-    padding-top: 4.5rem;
+    padding: 1rem 1.25rem 0.75rem;
+  }
+
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e0e0e0;
   }
 
   h1 {
@@ -343,32 +372,35 @@
   }
 
   @media (max-width: 640px) {
-    .sidebar:not(.collapsed) {
-      width: 100%;
-      max-height: 55vh;
-      height: auto;
-      bottom: 0;
+    .sidebar {
       top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: auto;
+    }
+
+    .sidebar:not(.collapsed) {
+      max-height: 50vh;
     }
 
     .sidebar-content {
       border-right: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 1.25rem 1.25rem 0 0;
-      max-height: 55vh;
-    }
-
-    .header {
-      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1rem 1rem 0 0;
+      max-height: 50vh;
+      padding-bottom: env(safe-area-inset-bottom, 0.5rem);
     }
 
     .toggle-btn {
-      top: auto;
-      bottom: 5rem;
+      position: fixed;
+      top: 0.75rem;
+      left: 0.75rem;
     }
 
-    .sidebar.collapsed .toggle-btn {
-      bottom: 5rem;
+    .route-list {
+      padding-bottom: env(safe-area-inset-bottom, 1rem);
     }
   }
 </style>
