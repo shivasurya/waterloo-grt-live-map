@@ -3,28 +3,45 @@ import { FeedMessage } from 'gtfs-realtime-pbf-js-module';
 
 const API_URL = 'https://livemap.shivasurya.workers.dev/';
 
-export async function fetchVehicles() {
-  const url = `${API_URL}?cacheBust=${Date.now()}`;
-  const response = await fetch(url);
+async function fetchFeed(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
   const buffer = await response.arrayBuffer();
   const pbf = new PbfReader(new Uint8Array(buffer));
-  const feed = FeedMessage.read(pbf);
+  return FeedMessage.read(pbf).entity;
+}
 
-  return feed.entity
-    .filter((e) => e.vehicle?.position && e.vehicle?.trip)
-    .map((e) => ({
-      id: e.id,
-      routeId: e.vehicle.trip.route_id,
-      tripId: e.vehicle.trip.trip_id,
-      directionId: e.vehicle.trip.direction_id,
-      latitude: e.vehicle.position.latitude,
-      longitude: e.vehicle.position.longitude,
-      bearing: e.vehicle.position.bearing,
-      speed: e.vehicle.position.speed,
-      vehicleId: e.vehicle.vehicle?.id || e.id,
-    }));
+export async function fetchVehicles() {
+  const results = await Promise.allSettled([
+    fetchFeed(`${API_URL}?feed=0&cacheBust=${Date.now()}`),
+    fetchFeed(`${API_URL}?feed=1&cacheBust=${Date.now()}`),
+    fetchFeed(`${API_URL}?feed=2&cacheBust=${Date.now()}`),
+  ]);
+
+  const seen = new Set();
+  const vehicles = [];
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const e of result.value) {
+      if (!e.vehicle?.position || !e.vehicle?.trip) continue;
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      vehicles.push({
+        id: e.id,
+        routeId: e.vehicle.trip.route_id,
+        tripId: e.vehicle.trip.trip_id,
+        directionId: e.vehicle.trip.direction_id,
+        latitude: e.vehicle.position.latitude,
+        longitude: e.vehicle.position.longitude,
+        bearing: e.vehicle.position.bearing,
+        speed: e.vehicle.position.speed,
+        vehicleId: e.vehicle.vehicle?.id || e.id,
+      });
+    }
+  }
+
+  return vehicles;
 }
 
 const ROUTE_COLORS = {
