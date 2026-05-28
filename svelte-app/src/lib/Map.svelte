@@ -91,13 +91,6 @@
         (a, b) => parseInt(a) - parseInt(b)
       );
       onRoutesUpdate(routes);
-
-      if (map?.getSource('vehicles')) {
-        const filtered = selectedRoute
-          ? data.filter((v) => v.routeId === selectedRoute)
-          : data;
-        map.getSource('vehicles').setData(buildGeoJSON(filtered));
-      }
     } catch (err) {
       console.error('Failed to fetch vehicles:', err);
       error = err.message;
@@ -302,7 +295,7 @@
       updateData();
       startCountdown();
 
-      fetchRouteShapes().then((s) => { routeShapes = s; }).catch(() => {});
+      fetchRouteShapes().then((s) => { routeShapes = s; }).catch((err) => console.error('Failed to load route shapes:', err));
 
       intervalId = setInterval(() => {
         updateData();
@@ -338,7 +331,7 @@
   <div class="status-bar">
     <div class="status-pill">
       <span class="pulse-dot"></span>
-      <span>{vehicles.length} buses</span>
+      <span>{vehicles.length} buses & trains</span>
     </div>
     <div class="status-pill countdown-pill">
       {countdown}s
