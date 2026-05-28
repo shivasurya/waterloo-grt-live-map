@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
-  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle } from './gtfs.js';
+  import { fetchVehicles, getRouteColor, getRouteType, fetchRouteShapes, splitShapeAtVehicle, getDirectionColor, lightenColor, getRouteShape } from './gtfs.js';
 
   let { selectedRoute = $bindable(''), onRoutesUpdate = () => {} } = $props();
 
@@ -39,25 +39,17 @@
     });
   }
 
-  function busSvg(color) {
+  // Solid silhouette icons with arrow tip — pointing up (north). Rotated by bearing.
+  // SDF so we can recolor per-vehicle by direction.
+  function busSvg() {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <rect x="8" y="8" width="48" height="48" rx="12" fill="${color}" stroke="white" stroke-width="3"/>
-      <rect x="16" y="14" width="14" height="12" rx="3" fill="rgba(255,255,255,0.85)"/>
-      <rect x="34" y="14" width="14" height="12" rx="3" fill="rgba(255,255,255,0.85)"/>
-      <circle cx="20" cy="46" r="5" fill="#1e293b" stroke="white" stroke-width="1.5"/>
-      <circle cx="44" cy="46" r="5" fill="#1e293b" stroke="white" stroke-width="1.5"/>
-      <rect x="14" y="30" width="36" height="8" rx="2" fill="rgba(0,0,0,0.15)"/>
+      <path d="M32 4 L46 22 L42 22 L42 52 Q42 56 38 56 L26 56 Q22 56 22 52 L22 22 L18 22 Z" fill="white"/>
     </svg>`;
   }
 
-  function trainSvg(color) {
+  function trainSvg() {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <rect x="8" y="6" width="48" height="52" rx="14" fill="${color}" stroke="white" stroke-width="3"/>
-      <rect x="14" y="12" width="36" height="16" rx="4" fill="rgba(255,255,255,0.85)"/>
-      <rect x="14" y="32" width="36" height="10" rx="3" fill="rgba(0,0,0,0.15)"/>
-      <circle cx="22" cy="50" r="4" fill="white"/>
-      <circle cx="42" cy="50" r="4" fill="white"/>
-      <line x1="32" y1="12" x2="32" y2="28" stroke="rgba(0,0,0,0.1)" stroke-width="2"/>
+      <path d="M32 4 L48 22 L44 22 L44 52 Q44 58 38 58 L26 58 Q20 58 20 52 L20 22 L16 22 Z" fill="white"/>
     </svg>`;
   }
 
@@ -70,10 +62,11 @@
         properties: {
           routeId: v.routeId,
           vehicleId: v.vehicleId,
-          bearing: v.bearing,
+          bearing: v.bearing || 0,
           speed: v.speed,
+          directionId: v.directionId,
           routeType: getRouteType(v.routeId),
-          color: getRouteColor(v.routeId),
+          color: getDirectionColor(v.routeId, v.directionId),
           icon: getRouteType(v.routeId) === 'LRT' ? 'train-icon' : 'bus-icon',
         },
       })),
@@ -111,13 +104,14 @@
   async function setupMapLayers() {
     const emptyGeoJSON = { type: 'FeatureCollection', features: [] };
 
-    const busImg = await createIconImage(busSvg('#0ea5e9'), 64);
-    const trainImg = await createIconImage(trainSvg('#dc2626'), 64);
-    map.addImage('bus-icon', busImg, { sdf: false });
-    map.addImage('train-icon', trainImg, { sdf: false });
+    const busImg = await createIconImage(busSvg(), 64);
+    const trainImg = await createIconImage(trainSvg(), 64);
+    map.addImage('bus-icon', busImg, { sdf: true });
+    map.addImage('train-icon', trainImg, { sdf: true });
 
     map.addSource('route-covered', { type: 'geojson', data: emptyGeoJSON });
     map.addSource('route-upcoming', { type: 'geojson', data: emptyGeoJSON });
+    map.addSource('route-stops', { type: 'geojson', data: emptyGeoJSON });
 
     map.addLayer({
       id: 'route-covered-line',
@@ -125,8 +119,8 @@
       source: 'route-covered',
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 5, 18, 8],
-        'line-opacity': 0.4,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 10],
+        'line-opacity': 0.5,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -137,11 +131,24 @@
       source: 'route-upcoming',
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 10],
-        'line-opacity': 0.85,
-        'line-dasharray': [2, 1],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 7, 18, 12],
+        'line-opacity': 0.95,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
+    });
+
+    // Stop dots — only visible at moderate+ zoom
+    map.addLayer({
+      id: 'route-stops-circles',
+      type: 'circle',
+      source: 'route-stops',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 3, 15, 5, 18, 8],
+        'circle-color': '#ffffff',
+        'circle-stroke-color': ['get', 'color'],
+        'circle-stroke-width': 2,
+        'circle-opacity': 0.95,
+      },
     });
 
     map.addSource('vehicles', { type: 'geojson', data: emptyGeoJSON });
@@ -152,18 +159,23 @@
       source: 'vehicles',
       layout: {
         'icon-image': ['get', 'icon'],
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.35, 14, 0.6, 18, 1],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 14, 0.65, 18, 1],
+        'icon-rotate': ['get', 'bearing'],
+        'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'text-field': ['get', 'routeId'],
-        'text-size': ['interpolate', ['linear'], ['zoom'], 10, 0, 12, 9, 14, 12, 18, 16],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 10, 0, 12, 10, 14, 12, 18, 16],
         'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-        'text-offset': [0, 2.2],
+        'text-offset': [0, 2.4],
         'text-allow-overlap': false,
       },
       paint: {
+        'icon-color': ['get', 'color'],
+        'icon-halo-color': '#ffffff',
+        'icon-halo-width': 1.5,
         'text-color': '#e0e0e0',
-        'text-halo-color': 'rgba(0,0,0,0.7)',
+        'text-halo-color': 'rgba(0,0,0,0.8)',
         'text-halo-width': 1.5,
       },
     });
@@ -181,12 +193,13 @@
       const coords = e.features[0].geometry.coordinates.slice();
       const isLRT = props.routeType === 'LRT';
       const label = isLRT ? 'Train' : 'Bus';
+      const dirLabel = String(props.directionId) === '0' ? 'Outbound' : 'Inbound';
       popup
         .setLngLat(coords)
         .setHTML(
           `<div class="popup-content">
             <span class="popup-badge" style="background:${props.color}">Route ${props.routeId}</span>
-            <span class="popup-type">${props.routeType}</span>
+            <span class="popup-dir">${dirLabel}</span>
             <span class="popup-vehicle">${label} #${props.vehicleId}</span>
           </div>`
         )
@@ -217,35 +230,53 @@
 
     map.getSource('vehicles').setData(buildGeoJSON(filtered));
 
-    // Update route path lines
     const emptyCollection = { type: 'FeatureCollection', features: [] };
     const coveredFeatures = [];
     const upcomingFeatures = [];
+    const stopFeatures = [];
 
     if (route && filtered.length > 0 && shapes) {
-      const shapeData = shapes[route];
-      if (shapeData) {
-        for (const v of filtered) {
-          const dirCoords = shapeData[String(v.directionId)] || shapeData['0'] || shapeData['1'];
-          if (!dirCoords || dirCoords.length < 2) continue;
+      // Draw shape for each direction that has at least one vehicle
+      const directionsSeen = new Set();
+      for (const v of filtered) {
+        const dirKey = String(v.directionId);
+        if (directionsSeen.has(dirKey)) continue;
+        directionsSeen.add(dirKey);
 
-          const color = getRouteColor(v.routeId);
-          const { covered, upcoming } = splitShapeAtVehicle(dirCoords, v.longitude, v.latitude);
+        const data = getRouteShape(shapes, route, v.directionId);
+        if (!data || data.shape.length < 2) continue;
+
+        const dirColor = getDirectionColor(route, v.directionId);
+        const lightColor = lightenColor(dirColor, 25);
+
+        // For this direction, find the vehicle closest to the start to split
+        const dirVehicles = filtered.filter((x) => String(x.directionId) === dirKey);
+        for (const dv of dirVehicles) {
+          const { covered, upcoming } = splitShapeAtVehicle(data.shape, dv.longitude, dv.latitude);
 
           if (covered.length >= 2) {
             coveredFeatures.push({
               type: 'Feature',
               geometry: { type: 'LineString', coordinates: covered },
-              properties: { color },
+              properties: { color: lightColor },
             });
           }
           if (upcoming.length >= 2) {
             upcomingFeatures.push({
               type: 'Feature',
               geometry: { type: 'LineString', coordinates: upcoming },
-              properties: { color },
+              properties: { color: dirColor },
             });
           }
+        }
+
+        // Stops for this direction
+        for (const s of data.stops) {
+          stopFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [s[0], s[1]] },
+            properties: { color: dirColor, name: s[2] || '' },
+          });
         }
       }
     }
@@ -256,14 +287,20 @@
     map.getSource('route-upcoming')?.setData(
       upcomingFeatures.length > 0 ? { type: 'FeatureCollection', features: upcomingFeatures } : emptyCollection
     );
+    map.getSource('route-stops')?.setData(
+      stopFeatures.length > 0 ? { type: 'FeatureCollection', features: stopFeatures } : emptyCollection
+    );
 
     if (route && filtered.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filtered.forEach((v) => bounds.extend([v.longitude, v.latitude]));
       if (shapes?.[route]) {
+        const seenDirs = new Set();
         for (const v of filtered) {
-          const dirCoords = shapes[route][String(v.directionId)] || shapes[route]['0'];
-          if (dirCoords) dirCoords.forEach((c) => bounds.extend(c));
+          if (seenDirs.has(v.directionId)) continue;
+          seenDirs.add(v.directionId);
+          const data = getRouteShape(shapes, route, v.directionId);
+          if (data) data.shape.forEach((c) => bounds.extend(c));
         }
       }
       map.fitBounds(bounds, { padding: 80, maxZoom: 15 });
@@ -484,6 +521,12 @@
   :global(.popup-type) {
     color: #94a3b8;
     font-size: 0.75rem;
+  }
+
+  :global(.popup-dir) {
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 600;
   }
 
   :global(.popup-vehicle) {

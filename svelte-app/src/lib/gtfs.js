@@ -76,6 +76,53 @@ export function getRouteType(routeId) {
   return 'Local';
 }
 
+function hexToHsl(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return [h * 360, s * 100, l * 100];
+}
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r, g, b;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const toHex = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+export function getDirectionColor(routeId, directionId) {
+  const base = getRouteColor(routeId);
+  if (directionId === 0 || directionId === '0') return base;
+  // Direction 1: rotate hue by 180° (complementary color)
+  const [h, s, l] = hexToHsl(base);
+  return hslToHex((h + 180) % 360, s, l);
+}
+
+export function lightenColor(hex, amount = 30) {
+  const [h, s, l] = hexToHsl(hex);
+  return hslToHex(h, Math.max(s - 15, 20), Math.min(l + amount, 85));
+}
+
 let shapesCache = null;
 
 export async function fetchRouteShapes() {
@@ -84,6 +131,16 @@ export async function fetchRouteShapes() {
   if (!res.ok) throw new Error(`Shapes: HTTP ${res.status}`);
   shapesCache = await res.json();
   return shapesCache;
+}
+
+export function getRouteShape(shapes, routeId, directionId) {
+  const route = shapes?.[routeId];
+  if (!route) return null;
+  const dir = route[String(directionId)] || route['0'] || route['1'];
+  if (!dir) return null;
+  // Handle both old format (array of coords) and new format ({shape, stops})
+  if (Array.isArray(dir)) return { shape: dir, stops: [] };
+  return dir;
 }
 
 function distSq(a, b) {
