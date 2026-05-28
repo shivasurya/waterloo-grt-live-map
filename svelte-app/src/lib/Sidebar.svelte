@@ -32,12 +32,14 @@
   }
 </script>
 
+{#if collapsed}
+  <button class="toggle-btn" onclick={() => (collapsed = false)} aria-label="Open route panel">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+{/if}
+
 <div class="sidebar" class:collapsed>
-  {#if collapsed}
-    <button class="toggle-btn" onclick={() => (collapsed = false)} aria-label="Open route panel">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
-  {:else}
+  {#if !collapsed}
     <div class="sidebar-content">
       <div class="header">
         <div class="header-row">
@@ -130,23 +132,23 @@
   }
 
   .toggle-btn {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    width: 42px;
-    height: 42px;
+    position: fixed;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 44px;
+    height: 44px;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(26, 26, 46, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(26, 26, 46, 0.92);
     backdrop-filter: blur(12px);
     color: #e0e0e0;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
     transition: background 0.2s;
-    z-index: 11;
+    z-index: 50;
   }
 
   .toggle-btn:hover {
@@ -391,12 +393,6 @@
       border-radius: 1rem 1rem 0 0;
       max-height: 50vh;
       padding-bottom: env(safe-area-inset-bottom, 0.5rem);
-    }
-
-    .toggle-btn {
-      position: fixed;
-      top: 0.75rem;
-      left: 0.75rem;
     }
 
     .route-list {
